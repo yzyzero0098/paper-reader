@@ -1,0 +1,155 @@
+export interface Paper {
+  id: string;
+  title: string;
+  filename: string;
+  pages: number;
+  added_at: number;
+  meta: Record<string, string>;
+}
+
+export type BlockKind = "text" | "heading" | "caption" | "small" | "reference";
+
+export interface Block {
+  id: string;
+  bbox: [number, number, number, number];
+  text: string;
+  kind: BlockKind;
+  size: number;
+  lines: number;
+  bold: boolean;
+}
+
+export interface Figure {
+  id: string;
+  kind: "figure" | "table";
+  bbox: [number, number, number, number];
+  caption: string;
+  caption_bbox: [number, number, number, number] | null;
+}
+
+export interface Citation {
+  text: string;
+  style: "numeric" | "author-year";
+  refs: number[];
+  authors?: string;
+  rects: [number, number, number, number][];
+}
+
+export interface Layout {
+  page: number;
+  width: number;
+  height: number;
+  body_size: number;
+  blocks: Block[];
+  figures: Figure[];
+  citations: Citation[];
+}
+
+export interface Sentence {
+  id: string;
+  text: string;
+  t: string;
+  rects: [number, number, number, number][];
+}
+
+export interface TranslatedBlock {
+  id: string;
+  kind: BlockKind;
+  bbox: [number, number, number, number];
+  size: number;
+  lines: number;
+  text: string;
+  t: string;
+  sentences: Sentence[];
+}
+
+export interface ActiveSentence {
+  page: number;
+  sid: string;
+  rects: [number, number, number, number][];
+}
+
+export interface Reference {
+  n: number;
+  raw: string;
+  doi: string;
+  year: string;
+  first_author: string;
+  meta?: ReferenceMeta;
+}
+
+export interface ReferenceMeta {
+  title?: string;
+  authors?: string[];
+  year?: string;
+  journal?: string;
+  doi?: string;
+  url?: string;
+  abstract?: string;
+  cited_by?: number;
+}
+
+export interface Highlight {
+  id: number;
+  paper_id: string;
+  page: number;
+  rects: [number, number, number, number][];
+  color: string;
+  text: string;
+  note: string;
+  created_at: number;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatGPTAuthStatus {
+  logged_in: boolean;
+  email?: string;
+  sharing?: boolean;
+  scopes?: string[];
+  expires_at?: number;
+  pending?: boolean;
+  last_error?: string;
+}
+
+export interface ProviderInfo {
+  label: string;
+  model: string;
+  models: string[];
+  base_url: string;
+  vision: boolean;
+  oauth?: boolean;
+  auth?: ChatGPTAuthStatus;
+  key_set: boolean;
+  key_hint: string;
+  key_from_env: boolean;
+}
+
+export interface Settings {
+  target_lang: string;
+  default_provider: string;
+  vision_provider: string;
+  languages: Record<string, string>;
+  providers: Record<string, ProviderInfo>;
+}
+
+export interface UsageAgg {
+  input: number;
+  output: number;
+  calls: number;
+}
+
+export interface UsageSummary {
+  today: UsageAgg;
+  total: UsageAgg;
+  paper?: UsageAgg;
+  by_provider_today: { provider: string; model: string; input: number; output: number; calls: number }[];
+  by_kind_today: { kind: string; input: number; output: number; calls: number }[];
+}
+
+export type Effort = "low" | "medium" | "high";
+
+export type ExplainKind = "text" | "equation" | "term" | "figure" | "table" | "citation";

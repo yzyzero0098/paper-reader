@@ -1,0 +1,22 @@
+services:
+  paper-reader:
+    build: .
+    image: paper-reader:latest
+    restart: unless-stopped
+    ports:
+      # Bound to localhost on purpose: the app has no login of its own.
+      - "127.0.0.1:8000:8000"
+      # Callback port for "Sign in with ChatGPT" (must stay on 127.0.0.1).
+      - "127.0.0.1:1455:1455"
+    environment:
+      PAPER_READER_OAUTH_PORT: "1455"
+      PAPER_READER_OAUTH_BIND: "0.0.0.0"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    volumes:
+      - paper-reader-data:/data
+
+volumes:
+  paper-reader-data:

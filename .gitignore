@@ -1,0 +1,23 @@
+# runtime data (papers, SQLite, settings, OAuth tokens) - never commit
+data/
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# build / dependencies
+node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editor / tool config
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
