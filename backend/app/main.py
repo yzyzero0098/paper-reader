@@ -5,7 +5,7 @@ import json
 import traceback
 from typing import AsyncIterator
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -165,10 +165,10 @@ async def list_papers():
 
 
 @app.post("/api/papers")
-async def upload_paper(file: UploadFile = File(...)):
+async def upload_paper(file: UploadFile = File(...), folder_id: int | None = Form(None)):
     data = await file.read()
     try:
-        return services.add_paper(data, file.filename or "paper.pdf")
+        return services.add_paper(data, file.filename or "paper.pdf", folder_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -178,16 +178,81 @@ async def get_paper(pid: str):
     return _404(pid)
 
 
-class TitlePatch(BaseModel):
-    title: str
+class PaperPatch(BaseModel):
+    title: str | None = None
+    folder_id: int | None = None        # send null to move a paper out of its folder
 
 
 @app.patch("/api/papers/{pid}")
-async def patch_paper(pid: str, body: TitlePatch):
+async def patch_paper(pid: str, body: PaperPatch):
     _404(pid)
-    db.update_paper_title(pid, body.title.strip()[:400])
-    services._context.pop(pid, None)
+    if body.title is not None:
+        db.update_paper_title(pid, body.title.strip()[:400])
+        services._context.pop(pid, None)
+    if "folder_id" in body.model_fields_set:
+        if body.folder_id is not None and not any(f["id"] == body.folder_id for f in db.list_folders()):
+            raise HTTPException(404, "폴더를 찾을 수 없습니다.")
+        db.set_paper_folder(pid, body.folder_id)
     return db.get_paper(pid)
+
+
+# ---------------------------------------------------------------- folders
+class FolderIn(BaseModel):
+    name: str | None = None
+    color: str | None = None
+
+
+@app.get("/api/folders")
+async def list_folders():
+    return db.list_folders()
+
+
+@app.post("/api/folders")
+async def create_folder(body: FolderIn):
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(400, "폴더 이름을 입력하세요.")
+    return {"id": db.add_folder(name[:80], body.color)}
+
+
+@app.patch("/api/folders/{fid}")
+async def patch_folder(fid: int, body: FolderIn):
+    name = body.name.strip()[:80] if body.name is not None else None
+    if name == "":
+        raise HTTPException(400, "폴더 이름을 입력하세요.")
+    db.update_folder(fid, name, body.color)
+    return {"ok": True}
+
+
+@app.delete("/api/folders/{fid}")
+async def remove_folder(fid: int):
+    db.delete_folder(fid)          # papers move back to "unfiled"; none are deleted
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- reading log
+class HeartbeatIn(BaseModel):
+    day: str                         # client-local date, YYYY-MM-DD
+    seconds: int = 0
+    page: int | None = None
+
+
+@app.post("/api/papers/{pid}/reading")
+async def reading_heartbeat(pid: str, body: HeartbeatIn):
+    _404(pid)
+    import re as _re
+    if not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", body.day):
+        raise HTTPException(400, "day 형식은 YYYY-MM-DD 입니다.")
+    db.log_reading(pid, body.day, min(max(body.seconds, 0), 300), body.page)
+    return {"ok": True}
+
+
+@app.get("/api/reading/calendar")
+async def reading_calendar(month: str):
+    import re as _re
+    if not _re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(400, "month 형식은 YYYY-MM 입니다.")
+    return db.reading_calendar(month)
 
 
 @app.delete("/api/papers/{pid}")

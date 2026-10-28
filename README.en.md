@@ -14,6 +14,8 @@ A **local web reader for research papers**. Open a PDF and get translation, figu
 | Selection and right-click menu | Select text for an Explain / Translate / Equation / Ask / Highlight toolbar. Right-click for the same menu plus a **question box**. |
 | Smart citations | Click an in-text citation (superscript, `[12]`, `(3–5)`, author-year) to see the reference entry and CrossRef metadata (DOI, citation count, abstract), and ask why the authors cite it. |
 | Summary and chat | A structured summary of the whole paper, and Q&A grounded in the full text with page references. Conversations are saved. Pick the model and reasoning effort (fast / normal / deep) per request. |
+| Topic folders | Create folders in the library sidebar and move papers by **dragging** them or with the folder picker on each card. Uploading while a folder is open puts the paper in it, and deleting a folder keeps its papers as `Unfiled`. Title search is included. |
+| Reading calendar | Logs which paper you read on which day and for how long, shown as a monthly calendar (folder-colored dots, papers and time per day, click a day for the list). Time only accumulates while the window is visible and focused, and reopening a paper resumes at the page you left. |
 | Notes and library | Translucent highlights with notes, PDF upload and delete. Translations and summaries are cached for instant reuse. |
 | Token usage | Today's and this paper's token totals appear in the top bar; hover for a breakdown by task and model. |
 

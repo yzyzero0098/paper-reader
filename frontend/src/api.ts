@@ -1,6 +1,11 @@
 import type {
-  ChatGPTAuthStatus, ChatMessage, ExplainKind, Highlight, Layout, Paper, Reference, Settings, TranslatedBlock, UsageSummary,
+  ChatGPTAuthStatus, ChatMessage, ExplainKind, Folder, Highlight, Layout, Paper, ReadingMonth, Reference, Settings,
+  TranslatedBlock, UsageSummary,
 } from "./types";
+
+/** Local date as YYYY-MM-DD (the calendar is based on the reader's own time zone). */
+export const localDay = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -23,13 +28,31 @@ export const api = {
   // papers
   listPapers: () => fetch("/api/papers").then((r) => json<Paper[]>(r)),
   getPaper: (id: string) => fetch(`/api/papers/${id}`).then((r) => json<Paper>(r)),
-  uploadPaper: (file: File) => {
+  uploadPaper: (file: File, folderId?: number | null) => {
     const fd = new FormData();
     fd.append("file", file);
+    if (folderId != null) fd.append("folder_id", String(folderId));
     return fetch("/api/papers", { method: "POST", body: fd }).then((r) => json<Paper>(r));
   },
   deletePaper: (id: string) => fetch(`/api/papers/${id}`, { method: "DELETE" }).then((r) => json(r)),
   renamePaper: (id: string, title: string) => post(`/api/papers/${id}`, { title }, "PATCH").then((r) => json<Paper>(r)),
+  movePaper: (id: string, folderId: number | null) =>
+    post(`/api/papers/${id}`, { folder_id: folderId }, "PATCH").then((r) => json<Paper>(r)),
+
+  // folders and reading log
+  folders: () => fetch("/api/folders").then((r) => json<Folder[]>(r)),
+  createFolder: (name: string) => post("/api/folders", { name }).then((r) => json<{ id: number }>(r)),
+  patchFolder: (id: number, patch: { name?: string; color?: string }) =>
+    post(`/api/folders/${id}`, patch, "PATCH").then((r) => json(r)),
+  deleteFolder: (id: number) => fetch(`/api/folders/${id}`, { method: "DELETE" }).then((r) => json(r)),
+  readingHeartbeat: (id: string, seconds: number, page: number | null) =>
+    fetch(`/api/papers/${id}/reading`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ day: localDay(), seconds, page }),
+      keepalive: true,
+    }),
+  readingCalendar: (month: string) => fetch(`/api/reading/calendar?month=${month}`).then((r) => json<ReadingMonth>(r)),
   fileUrl: (id: string) => `/api/papers/${id}/file`,
   figureUrl: (id: string, fid: string, caption = 1) => `/api/papers/${id}/figures/${fid}/image?caption=${caption}`,
 

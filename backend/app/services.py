@@ -35,7 +35,7 @@ def doc_for(pid: str) -> fitz.Document:
     return pdf_engine.open_doc(paper_path(pid))
 
 
-def add_paper(data: bytes, filename: str) -> dict:
+def add_paper(data: bytes, filename: str, folder_id: int | None = None) -> dict:
     if not data.startswith(b"%PDF"):
         raise ValueError("PDF 파일이 아닙니다.")
     pid = uuid.uuid4().hex[:12]
@@ -45,6 +45,8 @@ def add_paper(data: bytes, filename: str) -> dict:
     title = pdf_engine.extract_title(doc)
     meta = {k: v for k, v in (doc.metadata or {}).items() if v and k in ("author", "subject", "keywords", "creationDate")}
     db.add_paper(pid, title, filename, doc.page_count, meta)
+    if folder_id is not None:
+        db.set_paper_folder(pid, folder_id)
     return db.get_paper(pid)
 
 

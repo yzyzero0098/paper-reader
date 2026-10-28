@@ -5,6 +5,32 @@ export interface Paper {
   pages: number;
   added_at: number;
   meta: Record<string, string>;
+  folder_id: number | null;
+  last_page: number | null;
+  last_read: number | null;
+}
+
+export interface Folder {
+  id: number;
+  name: string;
+  color: string;
+  count: number;
+}
+
+export interface ReadingEntry {
+  paper_id: string;
+  title: string;
+  seconds: number;
+  folder_id: number | null;
+  folder_name: string | null;
+  folder_color: string | null;
+}
+
+export interface ReadingMonth {
+  month: string;
+  days: Record<string, ReadingEntry[]>;
+  total_seconds: number;
+  papers: number;
 }
 
 export type BlockKind = "text" | "heading" | "caption" | "small" | "reference";

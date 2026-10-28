@@ -82,6 +82,39 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
 
   const refreshUsage = useCallback(() => api.usage(id).then(setUsage).catch(() => {}), [id]);
 
+  // ---------- reading log: count the open day, then add time only while the page is visible and focused
+  const currentRef = useRef(0);
+  currentRef.current = current;
+  useEffect(() => {
+    api.readingHeartbeat(id, 0, null).catch(() => {});
+    const STEP = 15;
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible" && document.hasFocus()) {
+        api.readingHeartbeat(id, STEP, currentRef.current).catch(() => {});
+      }
+    }, STEP * 1000);
+    const flush = () => api.readingHeartbeat(id, 0, currentRef.current).catch(() => {});
+    window.addEventListener("pagehide", flush);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, [id]);
+
+  // resume where the paper was left
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !paper || !numPages) return;
+    restored.current = true;
+    const p = paper.last_page || 0;
+    if (p > 0 && p < numPages) setTimeout(() => goToPageNow(p), 400);
+  }, [paper, numPages]);
+  const goToPageNow = (p: number) => {
+    const el = pageRefs.current[p];
+    if (el && viewerRef.current) viewerRef.current.scrollTo({ top: el.offsetTop - 12 });
+  };
+
   useEffect(() => {
     api.getPaper(id).then(setPaper).catch(() => nav("/"));
     refreshHighlights();
