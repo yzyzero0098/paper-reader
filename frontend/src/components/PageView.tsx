@@ -1,8 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-// (useState is still used by TrBlock)
 import { Page } from "react-pdf";
 import { Sparkles } from "lucide-react";
-import type { Citation, Figure, Highlight, Layout, Sentence, TranslatedBlock } from "../types";
+import type { Citation, Figure, Highlight, Layout, Rect, Sentence, TranslatedBlock } from "../types";
 
 export type ViewMode = "original" | "side" | "overlay";
 
@@ -23,7 +22,8 @@ interface Props {
   translating?: boolean;
   mode: ViewMode;
   highlights: Highlight[];
-  activeSid?: string | null;
+  /** rects of the linked (hovered/selected) sentence on this page, if any */
+  activeRects?: Rect[];
   onVisible: (page: number, visible: boolean) => void;
   onSelection: (sel: SelectionInfo | null) => void;
   onFigure: (fig: Figure, page: number) => void;
@@ -34,8 +34,8 @@ interface Props {
   registerRef: (el: HTMLDivElement | null) => void;
 }
 
-/** A translated block drawn over the original text; the font shrinks until the text fits the box. */
-function TrBlock({ b, scale }: { b: TranslatedBlock; scale: number }) {
+/** A translated paragraph drawn over the original text; the font shrinks until the text fits the box. */
+function TrBlock({ b, box, text, scale }: { b: TranslatedBlock; box: Rect; text: string; scale: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const base = Math.max(6, b.size * scale * 0.96);
   const [fs, setFs] = useState(base);
@@ -45,13 +45,13 @@ function TrBlock({ b, scale }: { b: TranslatedBlock; scale: number }) {
     let f = base;
     el.style.fontSize = f + "px";
     let guard = 0;
-    while (el.scrollHeight > el.clientHeight + 1 && f > base * 0.45 && guard++ < 60) {
+    while (el.scrollHeight > el.clientHeight + 1 && f > base * 0.4 && guard++ < 70) {
       f -= Math.max(0.2, f * 0.04);
       el.style.fontSize = f + "px";
     }
     setFs(f);
-  }, [b.t, scale, base]);
-  const [x0, y0, x1, y1] = b.bbox;
+  }, [text, scale, base]);
+  const [x0, y0, x1, y1] = box;
   return (
     <div
       ref={ref}
@@ -65,13 +65,13 @@ function TrBlock({ b, scale }: { b: TranslatedBlock; scale: number }) {
       }}
       title={b.text}
     >
-      {b.t}
+      {text}
     </div>
   );
 }
 
 function PageView({
-  pageIndex, scale, pageWidth, pageHeight, layout, translation, translating, mode, highlights, activeSid,
+  pageIndex, scale, pageWidth, pageHeight, layout, translation, translating, mode, highlights, activeRects,
   onVisible, onSelection, onFigure, onCitation, onHighlightClick, onHoverSentence, onContextMenu, registerRef,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -131,16 +131,18 @@ function PageView({
     if (!wr) return;
     const x = (e.clientX - wr.left) / scale;
     const y = (e.clientY - wr.top) / scale;
-    let hit: string | null = null;
+    let hit: { page: number; sid: string } | null = null;
     for (const s of sentences) {
       if (s.rects.some((r) => x >= r[0] - 1 && x <= r[2] + 1 && y >= r[1] - 1 && y <= r[3] + 1)) {
-        hit = s.id;
+        // a fragment that ends a sentence from an earlier page links to that sentence
+        hit = s.ref ? { page: s.ref.page, sid: s.ref.sid } : { page: pageIndex, sid: s.id };
         break;
       }
     }
-    if (hit !== lastHover.current) {
-      lastHover.current = hit;
-      onHoverSentence(pageIndex, hit);
+    const key = hit ? `${hit.page}:${hit.sid}` : null;
+    if (key !== lastHover.current) {
+      lastHover.current = key;
+      onHoverSentence(hit ? hit.page : pageIndex, hit ? hit.sid : null);
     }
   };
 
@@ -154,7 +156,7 @@ function PageView({
   const W = pageWidth * scale;
   const H = pageHeight * scale;
   const showOverlay = mode === "overlay" && translation && translation.length > 0;
-  const activeRects = activeSid ? sentences.find((s) => s.id === activeSid)?.rects : undefined;
+  const boxStyle = (r: Rect) => ({ left: r[0] * scale, top: r[1] * scale, width: (r[2] - r[0]) * scale, height: (r[3] - r[1]) * scale });
 
   return (
     <div
@@ -184,18 +186,21 @@ function PageView({
       {(layout || translation || highlights.length > 0) && (
         <div className="overlay">
           {showOverlay &&
-            translation!.map((b) =>
-              b.t ? (
-                <TrBlock key={b.id} b={b} scale={scale} />
-              ) : (
-                <div
-                  key={b.id}
-                  className="tr-missing"
-                  style={{ left: b.bbox[0] * scale, top: b.bbox[1] * scale, width: (b.bbox[2] - b.bbox[0]) * scale, height: (b.bbox[3] - b.bbox[1]) * scale }}
-                  title="번역되지 않은 블록"
-                />
-              ),
-            )}
+            translation!.flatMap((b) => {
+              const boxes = b.boxes?.length ? b.boxes : [{ bbox: b.bbox, main: true }];
+              const onlyRef = !b.t && b.sentences.some((s) => s.ref);
+              return boxes.map((bx, k) =>
+                bx.main && b.t ? (
+                  <TrBlock key={`${b.id}-${k}`} b={b} box={bx.bbox} text={b.t} scale={scale} />
+                ) : !bx.main || onlyRef ? (
+                  <div key={`${b.id}-${k}`} className="tr-cont" style={boxStyle(bx.bbox)}>
+                    {onlyRef ? "↑ 앞 쪽에서 이어지는 문장 (번역은 앞 쪽에 있음)" : "↑ 앞 단에서 이어지는 문단"}
+                  </div>
+                ) : (
+                  <div key={`${b.id}-${k}`} className="tr-missing" style={boxStyle(bx.bbox)} title="번역되지 않은 블록" />
+                ),
+              );
+            })}
 
           {highlights.map((h) =>
             h.rects.map((r, i) => (

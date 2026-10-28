@@ -244,6 +244,11 @@ def usage_summary(paper_id: str | None = None) -> dict:
             "SELECT kind, SUM(input_tokens) input, SUM(output_tokens) output, COUNT(*) calls "
             "FROM usage WHERE ts>=? GROUP BY kind ORDER BY input+output DESC", (day_start,))],
     }
+    now = time.time()
+    for label, secs in (("5h", 5 * 3600), ("7d", 7 * 86400)):
+        out[f"window_{label}"] = agg("ts>=?", (now - secs,))
+        out[f"chatgpt_{label}"] = agg("ts>=? AND provider='chatgpt'", (now - secs,))
+    out["limit_hit_at"] = cache_get("chatgpt:limit_hit")
     if paper_id:
         out["paper"] = agg("paper_id=?", (paper_id,))
     return out

@@ -71,28 +71,37 @@ export interface Layout {
   citations: Citation[];
 }
 
+export type Rect = [number, number, number, number];
+
 export interface Sentence {
   id: string;
   text: string;
   t: string;
-  rects: [number, number, number, number][];
+  rects: Rect[];
+  /** this sentence continues on a later page: the part on that page */
+  cont?: { page: number; rects: Rect[] };
+  /** this fragment ends a sentence that starts on an earlier page (translated there) */
+  ref?: { page: number; sid: string };
 }
 
 export interface TranslatedBlock {
   id: string;
   kind: BlockKind;
-  bbox: [number, number, number, number];
+  bbox: Rect;
   size: number;
   lines: number;
   text: string;
   t: string;
   sentences: Sentence[];
+  /** overlay mode: one box per column run; the main box carries the translation */
+  boxes?: { bbox: Rect; main: boolean }[];
 }
 
 export interface ActiveSentence {
   page: number;
   sid: string;
-  rects: [number, number, number, number][];
+  rects: Rect[];
+  cont?: { page: number; rects: Rect[] };
 }
 
 export interface Reference {
@@ -158,6 +167,8 @@ export interface Settings {
   target_lang: string;
   default_provider: string;
   vision_provider: string;
+  usage_budget_5h: number;
+  usage_budget_7d: number;
   languages: Record<string, string>;
   providers: Record<string, ProviderInfo>;
 }
@@ -172,6 +183,11 @@ export interface UsageSummary {
   today: UsageAgg;
   total: UsageAgg;
   paper?: UsageAgg;
+  window_5h: UsageAgg;
+  window_7d: UsageAgg;
+  chatgpt_5h: UsageAgg;
+  chatgpt_7d: UsageAgg;
+  limit_hit_at: number | null;
   by_provider_today: { provider: string; model: string; input: number; output: number; calls: number }[];
   by_kind_today: { kind: string; input: number; output: number; calls: number }[];
 }

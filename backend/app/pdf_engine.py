@@ -59,6 +59,7 @@ def open_doc(path: Path) -> fitz.Document:
 
 
 def close_doc(path: Path) -> None:
+    _line_x_cache.pop(str(path), None)
     with _docs_lock:
         doc = _docs.pop(str(path), None)
         if doc is not None:
@@ -99,6 +100,94 @@ def _expand_numbers(s: str) -> list[int]:
 
 def _rect(b) -> fitz.Rect:
     return fitz.Rect(b)
+
+
+LINE_NO_RE = re.compile(r"^\s*\d{1,4}\s*$")
+
+
+def line_number_spans(blocks: list[dict], page_width: float, known_x: float | None = None) -> set[tuple[int, int, int]]:
+    """Find manuscript line numbers: short integer spans in a narrow margin column whose values increase
+    top to bottom. `known_x` is the line-number column found elsewhere in the document; spans there are
+    dropped even on pages with only a few lines. Returns (block, line, span) indices to drop."""
+    cands = []
+    page_h = 0.0
+    for bi, b in enumerate(blocks):
+        if b.get("type") != 0:
+            continue
+        page_h = max(page_h, b["bbox"][3])
+        for li, ln in enumerate(b["lines"]):
+            filled = [s for s in ln["spans"] if s["text"].strip()]
+            if len(filled) != 1:          # a line number stands alone on its line (not a table cell)
+                continue
+            for si, s in enumerate(ln["spans"]):
+                if s is not filled[0] or not LINE_NO_RE.match(s["text"]) or s["size"] < 7:
+                    continue
+                x0, y0, x1, _ = s["bbox"]
+                if x1 - x0 < 30 and (x1 < 0.22 * page_width or x0 > 0.78 * page_width):
+                    cands.append((x0, y0, int(s["text"]), (bi, li, si)))
+    drop: set[tuple[int, int, int]] = set()
+    cands.sort()
+    i = 0
+    while i < len(cands):
+        j = i
+        while j + 1 < len(cands) and cands[j + 1][0] - cands[i][0] <= 8:
+            j += 1
+        group = sorted(cands[i:j + 1], key=lambda c: c[1])
+        if known_x is not None and all(abs(g[0] - known_x) <= 8 for g in group):
+            drop.update(g[3] for g in group)
+        elif len(group) >= 5:
+            vals = [g[2] for g in group]
+            inc = sum(1 for a, b2 in zip(vals, vals[1:]) if 0 < b2 - a <= 3)
+            tall = group[-1][1] - group[0][1] >= 0.25 * max(page_h, 1)
+            if tall and inc >= 0.8 * (len(vals) - 1):
+                drop.update(g[3] for g in group)
+        i = j + 1
+    return drop
+
+
+_line_x_cache: dict[str, float | None] = {}
+
+
+def doc_line_number_x(doc: fitz.Document) -> float | None:
+    """x position of the manuscript line-number column, detected on the first pages (None if absent)."""
+    key = doc.name or str(id(doc))
+    if key not in _line_x_cache:
+        xs: list[float] = []
+        for pno in range(min(doc.page_count, 8)):
+            page = doc[pno]
+            blocks = page.get_text("dict")["blocks"]
+            for bi, li, si in line_number_spans(blocks, page.rect.width):
+                xs.append(blocks[bi]["lines"][li]["spans"][si]["bbox"][0])
+            if len(xs) >= 20:
+                break
+        _line_x_cache[key] = statistics.median(xs) if len(xs) >= 8 else None
+    return _line_x_cache[key]
+
+
+def strip_line_numbers(blocks: list[dict], page_width: float, known_x: float | None = None) -> list[dict]:
+    """Copy of the raw text blocks with line-number spans removed and bboxes recomputed."""
+    drop = line_number_spans(blocks, page_width, known_x)
+    if not drop:
+        return blocks
+    out = []
+    for bi, b in enumerate(blocks):
+        if b.get("type") != 0:
+            out.append(b)
+            continue
+        lines = []
+        for li, ln in enumerate(b["lines"]):
+            spans = [s for si, s in enumerate(ln["spans"]) if (bi, li, si) not in drop]
+            if any(s["text"].strip() for s in spans):
+                lines.append({**ln, "spans": spans})
+        if not lines:
+            continue
+        r = None
+        for ln in lines:
+            for s in ln["spans"]:
+                if s["text"].strip():
+                    r = fitz.Rect(s["bbox"]) if r is None else r | fitz.Rect(s["bbox"])
+        out.append({**b, "lines": lines, "bbox": tuple(r) if r else b["bbox"]})
+    return out
 
 
 def _merge_rects(rects: list[fitz.Rect], gap: float = 6) -> list[fitz.Rect]:
@@ -151,7 +240,7 @@ def reading_text(page: fitz.Page) -> str:
     """Page text in reading order: full-width blocks first, then left column, then right column."""
     W, H = page.rect.width, page.rect.height
     items = []
-    for b in page.get_text("dict")["blocks"]:
+    for b in strip_line_numbers(page.get_text("dict")["blocks"], W, doc_line_number_x(page.parent)):
         if b.get("type") != 0:
             continue
         x0, y0, x1, y1 = b["bbox"]
@@ -237,6 +326,7 @@ def page_layout(doc: fitz.Document, pno: int, refs_start: tuple[int, float] | No
     page = doc[pno]
     W, H = page.rect.width, page.rect.height
     raw = page.get_text("dict")
+    raw = {**raw, "blocks": strip_line_numbers(raw["blocks"], W, doc_line_number_x(doc))}
 
     # ---- text blocks
     blocks: list[dict] = []
@@ -283,6 +373,8 @@ def page_layout(doc: fitz.Document, pno: int, refs_start: tuple[int, float] | No
             kind = "heading"
         elif len(text) < 4 or (nlines == 1 and size < body_size * 0.8 and (bbox[1] < H * 0.06 or bbox[3] > H * 0.94)):
             kind = "small"           # page numbers, running headers
+        elif (nlines <= 2 or bbox[3] - bbox[1] < 2.6 * size) and len(text) < 160 and (bbox[3] < H * 0.065 or bbox[1] > H * 0.94):
+            kind = "small"           # running headers/footers ("Journal of ... Article", "J. ... 2022, 21, 2085")
         elif re.fullmatch(r"[\d\s.,;:()\[\]|\-–—]+", text):
             kind = "small"
         elif (size >= body_size * 1.15 and nlines <= 3 and len(text) < 160) or (bold and nlines <= 2 and len(text) < 120):
@@ -377,6 +469,16 @@ def page_layout(doc: fitz.Document, pno: int, refs_start: tuple[int, float] | No
             "caption_bbox": cap["bbox"] if cap else None,
         })
 
+    # ---- text drawn inside figures/tables (axis labels, legends, cells) is not body text
+    fig_boxes = [fitz.Rect(f["bbox"]) for f in figures]
+    for b in blocks:
+        if b["kind"] not in ("text", "heading") or not fig_boxes:
+            continue
+        r = fitz.Rect(b["bbox"])
+        area = max(r.get_area(), 1.0)
+        if any((r & fr).get_area() > 0.6 * area for fr in fig_boxes):
+            b["kind"] = "figtext"
+
     # ---- in-text citations (bracketed, parenthetical numeric, author-year; superscripts collected above)
     searchable: dict[str, dict] = {}
     for b in blocks:
@@ -420,15 +522,23 @@ ABBREV_RE = re.compile(
     r"(?:^|[\s(\[])(?:Fig|Figs|Tab|Tabs|Eq|Eqs|Ref|Refs|et al|al|i\.e|e\.g|vs|cf|viz|Dr|Mr|Mrs|Ms|Prof|No|Nos|approx|ca|St|Inc|Ltd|Co|Jr|Sr"
     r"|vol|pp|p|Suppl|Sect|Ch|Chem|Phys|Biol|Proc|Natl|Acad|Sci|J|Am|Soc|Nat|Rev|Res|Mol|Cell|Sci|Eng|Med|Univ|Dept|Lab|Ave|U\.S|U\.K|[A-Z])\.$"
 )
-SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9(\[\"“‘])")
+# sentence end: ". " or, after a word, a period followed by a superscript citation (".14 ", ".2,3 ", ".5–7 ")
+SENT_END_RE = re.compile(
+    r"(?:(?<=[A-Za-z)\]%])[.!?]\d{1,3}(?:[,–\-−]\d{1,3})*|[.!?])(?=\s+[A-Z0-9(\[\"“‘])"
+)
 
 
 def split_sentences(text: str) -> list[str]:
     """Split a paragraph into sentences, keeping common abbreviations and short fragments together."""
-    parts = [p.strip() for p in SENT_SPLIT_RE.split(text) if p.strip()]
+    parts, last = [], 0
+    for m in SENT_END_RE.finditer(text):
+        parts.append(text[last:m.end()].strip())
+        last = m.end()
+    parts.append(text[last:].strip())
+    parts = [p for p in parts if p]
     out: list[str] = []
     for p in parts:
-        if out and (ABBREV_RE.search(out[-1]) or len(out[-1]) < 25 or len(p) < 12):
+        if out and (ABBREV_RE.search(out[-1]) or len(out[-1]) < 12 or len(p) < 8):
             out[-1] += " " + p
         else:
             out.append(p)

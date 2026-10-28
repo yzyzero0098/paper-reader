@@ -20,6 +20,13 @@ class ChatGPTPlanError(Exception):
 
 def _friendly(code: str, message: str, status: int | None) -> str:
     if code == "subscription_sharing_usage_limit_exceeded" or status == 429:
+        try:
+            import time
+
+            from .. import db
+            db.cache_set("chatgpt:limit_hit", time.time())     # shown in the usage panel
+        except Exception:
+            pass
         return f"ChatGPT 플랜 사용 한도에 도달했습니다. 사용량 설정에서 확인하세요: {USAGE_URL}"
     if code == "subscription_sharing_user_not_eligible":
         return "이 ChatGPT 계정/워크스페이스는 외부 앱에서 플랜 사용이 허용되지 않습니다."

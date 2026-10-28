@@ -396,21 +396,29 @@ function TranslationPane({ numPages, lang, trans, translating, active, currentPa
                   data-page={i}
                   data-top={b.bbox[1]}
                 >
-                  {b.sentences.map((s, k) => (
-                    <span key={s.id}>
-                      <span
-                        className={"sent" + (active && active.page === i && active.sid === s.id ? " active" : "")}
-                        ref={(el) => registerEl(`${i}:${s.id}`, el)}
-                        onMouseEnter={() => onHover(i, s.id)}
-                        onMouseLeave={() => onHover(i, null)}
-                        onClick={() => onClick(i, s.id)}
-                        title={s.text}
-                      >
-                        {s.t || <span className="muted">{s.text}</span>}
+                  {b.sentences.map((s, k) => {
+                    const tp = s.ref ? s.ref.page : i;
+                    const tsid = s.ref ? s.ref.sid : s.id;
+                    const isActive = !!active && active.page === tp && active.sid === tsid;
+                    return (
+                      <span key={s.id}>
+                        <span
+                          className={(s.ref ? "sent-ref" : "sent") + (isActive ? " active" : "")}
+                          ref={(el) => registerEl(`${i}:${s.id}`, el)}
+                          onMouseEnter={() => onHover(tp, tsid)}
+                          onMouseLeave={() => onHover(tp, null)}
+                          onClick={() => onClick(tp, tsid)}
+                          title={s.ref ? `원문: ${s.text}` : s.text}
+                        >
+                          {s.ref
+                            ? `↑ p.${s.ref.page + 1}에서 이어지는 문장`
+                            : s.t || <span className="muted">{s.text}</span>}
+                        </span>
+                        {s.cont && <span className="cont-badge" title="이 문장은 다음 쪽까지 이어집니다">→ p.{s.cont.page + 1}</span>}
+                        {k < b.sentences.length - 1 ? " " : ""}
                       </span>
-                      {k < b.sentences.length - 1 ? " " : ""}
-                    </span>
-                  ))}
+                    );
+                  })}
                 </p>
                 {showOrig && <div className="tr-orig">{b.text}</div>}
               </div>

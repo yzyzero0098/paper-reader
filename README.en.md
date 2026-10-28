@@ -8,7 +8,9 @@ A **local web reader for research papers**. Open a PDF and get translation, figu
 
 | Feature | What it does |
 |---|---|
-| Side-by-side translation | The original PDF stays on the left; **sentence-level translation** appears in a right-hand panel and **scrolls in sync**. Hover a translated sentence to highlight the matching sentence in the PDF, and the other way round. Click a translated sentence to jump to its place in the PDF. |
+| Side-by-side translation | The original PDF stays on the left; **sentence-level translation** appears in a right-hand panel and **scrolls in sync**. Hover a translated sentence to highlight the matching sentence in the PDF, and the other way round. Click a translated sentence to jump to its place in the PDF. Drag the panel edge to resize it (double-click to reset). |
+| Sentences split across breaks | Sentences broken across lines, columns or pages (including a figure-only page in between) are joined and **translated as one sentence**. The full translation appears on the earlier page, the later page shows "↑ continues from the previous page", and hovering highlights both parts in the PDF. Running headers/footers and text inside figures are excluded from body text. |
+| Manuscript line numbers | Line numbers in the margin of submitted manuscripts are detected and left out of translations, summaries and citations. |
 | Overlay translation | Draws the translation of each paragraph, heading and caption over the original PDF, keeping the layout. |
 | Figure and table explanation | Hover a figure or table and click `Explain figure`. The image, its caption and the page text are sent to a vision model. |
 | Selection and right-click menu | Select text for an Explain / Translate / Equation / Ask / Highlight toolbar. Right-click for the same menu plus a **question box**. |
@@ -17,7 +19,7 @@ A **local web reader for research papers**. Open a PDF and get translation, figu
 | Topic folders | Create folders in the library sidebar and move papers by **dragging** them or with the folder picker on each card. Uploading while a folder is open puts the paper in it, and deleting a folder keeps its papers as `Unfiled`. Title search is included. |
 | Reading calendar | Logs which paper you read on which day and for how long, shown as a monthly calendar (folder-colored dots, papers and time per day, click a day for the list). Time only accumulates while the window is visible and focused, and reopening a paper resumes at the page you left. |
 | Notes and library | Translucent highlights with notes, PDF upload and delete. Translations and summaries are cached for instant reuse. |
-| Token usage | Today's and this paper's token totals appear in the top bar; hover for a breakdown by task and model. |
+| Usage panel | The button at the top right shows this app's token usage for the last 5 hours and 7 days as bars, as a percentage of an optional personal budget, plus today / this paper / per-task details, the share used through the ChatGPT account, and when the plan limit was last hit. Plan-wide ChatGPT usage (5-hour and weekly %) is not exposed to third-party apps by OpenAI, so the panel links to the official usage page instead. |
 
 ## Quick start
 

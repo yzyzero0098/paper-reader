@@ -11,8 +11,7 @@ import type {
 } from "../types";
 import PageView, { type SelectionInfo, type ViewMode } from "../components/PageView";
 import SidePanel, { RefMeta, type AiPrefs, type ExplainState, type Tab } from "../components/SidePanel";
-
-const fmtTok = (n: number) => (n >= 1_000_000 ? (n / 1_000_000).toFixed(2) + "M" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+import UsagePanel from "../components/UsagePanel";
 
 interface CitePopup {
   cite: Citation;
@@ -22,6 +21,10 @@ interface CitePopup {
   refs: Reference[] | null;
   meta: Record<number, Reference>;
 }
+
+const SIDE_KEY = "paper-reader.sideWidth";
+const DEFAULT_SIDE = 420;
+const MIN_SIDE = 300;
 
 const HL_COLORS: [string, string][] = [["yellow", "#fde68a"], ["green", "#a7f3d0"], ["blue", "#bfdbfe"], ["pink", "#fbcfe8"]];
 
@@ -48,6 +51,42 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [cite, setCite] = useState<CitePopup | null>(null);
   const [active, setActive] = useState<ActiveSentence | null>(null);
+  const [sideWidth, setSideWidth] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(SIDE_KEY));
+      return v >= MIN_SIDE ? v : DEFAULT_SIDE;
+    } catch {
+      return DEFAULT_SIDE;
+    }
+  });
+  const [resizing, setResizing] = useState(false);
+  const saveSideWidth = (w: number) => {
+    setSideWidth(w);
+    try {
+      localStorage.setItem(SIDE_KEY, String(Math.round(w)));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setResizing(true);
+    let w = sideWidth;
+    const onMove = (ev: MouseEvent) => {
+      w = Math.min(Math.max(window.innerWidth - ev.clientX, MIN_SIDE), Math.max(MIN_SIDE, window.innerWidth * 0.75));
+      setSideWidth(w);
+    };
+    const onUp = () => {
+      setResizing(false);
+      saveSideWidth(w);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("resizing");
+    };
+    document.body.classList.add("resizing");
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
   const [explain, setExplain] = useState<ExplainState>({ status: "idle", kind: "text", title: "", content: "" });
   const [chatDraft, setChatDraft] = useState("");
   const [error, setError] = useState("");
@@ -338,7 +377,7 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
     }
     const s = findSentenceRef.current(page, sid);
     if (!s) return;
-    setActive({ page, sid, rects: s.rects });
+    setActive({ page, sid, rects: s.rects, cont: s.cont });
     const pane = panelRef.current;
     const el = els.current.get(`${page}:${sid}`);
     if (pane && el) {
@@ -359,7 +398,7 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
       return;
     }
     const s = findSentence(page, sid);
-    if (s) setActive({ page, sid, rects: s.rects });
+    if (s) setActive({ page, sid, rects: s.rects, cont: s.cont });
   };
 
   const clickFromPane = (page: number, sid: string) => {
@@ -367,7 +406,7 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
     const pageEl = pageRefs.current[page];
     const v = viewerRef.current;
     if (!s || !pageEl || !v) return;
-    setActive({ page, sid, rects: s.rects });
+    setActive({ page, sid, rects: s.rects, cont: s.cont });
     const top = s.rects.length ? s.rects[0][1] : 0;
     syncLock.current = { source: "pane", until: Date.now() + 600 };
     v.scrollTo({ top: pageEl.offsetTop + top * scale - 140, behavior: "smooth" });
@@ -593,28 +632,7 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
             <option key={m} value={m}>{m}</option>
           ))}
         </select>
-        {usage && (
-          <div className="usage-pill" title="토큰 사용량">
-            오늘 <b>{fmtTok(usage.today.input + usage.today.output)}</b>
-            {usage.paper && <>· 이 논문 <b>{fmtTok(usage.paper.input + usage.paper.output)}</b></>}
-            <div className="usage-pop">
-              <table>
-                <tbody>
-                  <tr><td>오늘 입력 / 출력</td><td className="num">{fmtTok(usage.today.input)} / {fmtTok(usage.today.output)} · {usage.today.calls}회</td></tr>
-                  {usage.paper && <tr><td>이 논문 입력 / 출력</td><td className="num">{fmtTok(usage.paper.input)} / {fmtTok(usage.paper.output)} · {usage.paper.calls}회</td></tr>}
-                  <tr><td>전체 누적</td><td className="num">{fmtTok(usage.total.input + usage.total.output)}</td></tr>
-                  {usage.by_kind_today.map((k) => (
-                    <tr key={k.kind}><td className="muted">· {k.kind}</td><td className="num muted">{fmtTok(k.input + k.output)}</td></tr>
-                  ))}
-                  {usage.by_provider_today.map((p) => (
-                    <tr key={p.provider + p.model}><td className="muted">· {p.provider} {p.model}</td><td className="num muted">{fmtTok(p.input + p.output)}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="muted" style={{ marginTop: 6 }}>입력 토큰은 논문 본문 길이에 비례합니다. ChatGPT 구독은 토큰이 아닌 앱별 사용 한도로 집계됩니다.</div>
-            </div>
-          </div>
-        )}
+        <UsagePanel usage={usage} settings={settings} onSettingsChanged={onSettingsChanged} onRefresh={refreshUsage} />
         <button className="btn ghost" onClick={onOpenSettings} title="설정"><SettingsIcon size={18} /></button>
         <button className="btn ghost" onClick={() => setPanelOpen((v) => !v)} title="패널 접기/펴기">
           {panelOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
@@ -658,7 +676,12 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
                     translating={!!translating[i]}
                     mode={mode}
                     highlights={hlByPage[i] || []}
-                    activeSid={active && active.page === i ? active.sid : null}
+                    activeRects={
+                      !active ? undefined
+                        : active.page === i ? active.rects
+                        : active.cont && active.cont.page === i ? active.cont.rects
+                        : undefined
+                    }
                     onVisible={onVisible}
                     onSelection={setSelection}
                     onFigure={onFigure}
@@ -678,7 +701,15 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
           </Document>
         </div>
 
-        <div className={"side" + (panelOpen ? "" : " collapsed")}>
+        {panelOpen && (
+          <div
+            className={"resizer" + (resizing ? " on" : "")}
+            onMouseDown={startResize}
+            onDoubleClick={() => saveSideWidth(DEFAULT_SIDE)}
+            title="드래그해서 패널 크기 조절 (더블클릭: 기본 크기)"
+          />
+        )}
+        <div className={"side" + (panelOpen ? "" : " collapsed")} style={panelOpen ? { width: sideWidth } : undefined}>
           {panelOpen && (
             <SidePanel
               paperId={id}

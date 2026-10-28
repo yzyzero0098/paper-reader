@@ -10,11 +10,11 @@ from typing import AsyncIterator
 import fitz
 
 from . import citations as cit
-from . import db, pdf_engine
+from . import db, paragraphs, pdf_engine
 from .config import LANG_NAMES, PAPERS_DIR, load_settings
 from .llm import Msg, resolve_provider
 
-LAYOUT_VERSION = 4
+LAYOUT_VERSION = 11    # bump when layout extraction changes (invalidates cached layouts and translations)
 _refs_start: dict[str, tuple[int, float] | None] = {}
 _context: dict[str, dict] = {}
 
@@ -189,27 +189,84 @@ Rules:
 - Output ONLY a JSON object of the form {{"translations": [{{"id": "<item id>", "t": "<translation>"}}, ...]}} with one entry per input item, same ids."""
 
 
+def _body_page(pid: str, pno: int, step: int) -> tuple[int | None, dict | None]:
+    """Nearest page in direction `step` that has body text (skips figure-only pages)."""
+    n = doc_for(pid).page_count
+    q = pno + step
+    for _ in range(paragraphs.LOOKAHEAD):
+        if q < 0 or q >= n:
+            break
+        lay = layout(pid, q)
+        if paragraphs.has_body(lay):
+            return q, lay
+        q += step
+    return None, None
+
+
+def _open_tail(units: list[dict]) -> dict | None:
+    """The page's last body unit if it ends mid-sentence and no heading follows it."""
+    for u in reversed(units):
+        if u["kind"] == "heading":
+            return None
+        if u["kind"] == paragraphs.BODY:
+            return None if paragraphs.ends_sentence(u["blocks"][-1]["text"]) else u
+    return None
+
+
+def page_stitching(pid: str, pno: int, units: list[dict]) -> tuple[dict | None, dict | None]:
+    """(continuation into the next body page, reference back to the previous body page)."""
+    cont = None
+    tail = _open_tail(units)
+    if tail:
+        q, lay_q = _body_page(pid, pno, +1)
+        head_unit = paragraphs.first_content_is_body(lay_q) if lay_q else None
+        if head_unit:
+            head = paragraphs.split_unit(head_unit)[0]
+            rects = paragraphs.rects_for_range(doc_for(pid)[q], head_unit, head["start"], head["end"])
+            cont = {"unit_id": tail["id"], "page": q, "text": head["text"], "rects": rects}
+    ref = None
+    head_unit = paragraphs.first_content_is_body(layout(pid, pno))
+    if head_unit:
+        p, lay_p = _body_page(pid, pno, -1)
+        if lay_p:
+            prev_tail = _open_tail(paragraphs.build_units(lay_p))
+            if prev_tail:
+                last_k = len(paragraphs.split_unit(prev_tail)) - 1
+                ref = {"unit_id": head_unit["id"], "page": p, "sid": f"{prev_tail['id']}.{last_k}"}
+    return cont, ref
+
+
 async def translate_page(pid: str, pno: int, lang: str, provider_name: str | None = None,
                          force: bool = False, model: str | None = None) -> list[dict]:
-    key = f"tr{LAYOUT_VERSION}s:{pid}:{pno}:{lang}"
+    key = f"tr{LAYOUT_VERSION}u:{pid}:{pno}:{lang}"
     if not force:
         cached = db.cache_get(key)
         if cached is not None:
             return cached
     lay = layout(pid, pno)
-    targets = [b for b in lay["blocks"] if b["kind"] in ("text", "heading", "caption")]
-    if not targets:
+    units = paragraphs.build_units(lay)
+    if not units:
         db.cache_set(key, [])
         return []
+    cont, ref = page_stitching(pid, pno, units)
+    page = doc_for(pid)[pno]
 
-    # sentence items; chunk long pages so each request stays reliable
-    block_sents: dict[str, list[str]] = {}
+    # sentences per unit; the sentence cut by a page break is translated whole on the earlier page
+    unit_sents: dict[str, list[dict]] = {}
     items: list[dict] = []
-    for b in targets:
-        sents = pdf_engine.split_sentences(b["text"]) if b["kind"] == "text" else [b["text"]]
-        block_sents[b["id"]] = sents
-        for k, s in enumerate(sents):
-            items.append({"id": f"{b['id']}.{k}", "text": s})
+    for u in units:
+        ss = paragraphs.split_unit(u)
+        for k, s in enumerate(ss):
+            s["id"] = f"{u['id']}.{k}"
+            s["rects"] = paragraphs.rects_for_range(page, u, s["start"], s["end"])
+            if ref and u["id"] == ref["unit_id"] and k == 0:
+                s["ref"] = {"page": ref["page"], "sid": ref["sid"]}
+                continue
+            if cont and u["id"] == cont["unit_id"] and k == len(ss) - 1:
+                s["text"] = f"{s['text']} {cont['text']}"
+                s["cont"] = {"page": cont["page"], "rects": cont["rects"]}
+            items.append({"id": s["id"], "text": s["text"]})
+        unit_sents[u["id"]] = ss
     chunks: list[list[dict]] = [[]]
     size = 0
     for it in items:
@@ -232,18 +289,23 @@ async def translate_page(pid: str, pno: int, lang: str, provider_name: str | Non
             if isinstance(item, dict) and "id" in item:
                 result_map[str(item["id"])] = str(item.get("t", ""))
 
-    page = doc_for(pid)[pno]
     result = []
-    for b in targets:
-        sents = block_sents[b["id"]]
+    for u in units:
         sentences = []
-        for k, s in enumerate(sents):
-            sid = f"{b['id']}.{k}"
-            rects = [b["bbox"]] if len(sents) == 1 else (pdf_engine.sentence_rects(page, s, b["bbox"]) or [b["bbox"]])
-            sentences.append({"id": sid, "text": s, "t": result_map.get(sid, ""), "rects": rects})
+        for s in unit_sents[u["id"]]:
+            item = {"id": s["id"], "text": s["text"], "t": "" if s.get("ref") else result_map.get(s["id"], ""), "rects": s["rects"]}
+            for k in ("ref", "cont"):
+                if s.get(k):
+                    item[k] = s[k]
+            sentences.append(item)
+        first = u["blocks"][0]
         result.append({
-            "id": b["id"], "kind": b["kind"], "bbox": b["bbox"], "size": b["size"], "lines": b["lines"],
-            "text": b["text"], "t": " ".join(x["t"] for x in sentences if x["t"]), "sentences": sentences,
+            "id": u["id"], "kind": u["kind"], "bbox": first["bbox"], "size": first["size"],
+            "lines": sum(b["lines"] for b in u["blocks"]),
+            "text": paragraphs.unit_text(u),
+            "t": " ".join(x["t"] for x in sentences if x["t"]),
+            "sentences": sentences,
+            "boxes": paragraphs.overlay_boxes(u, lay["width"]),
         })
     db.cache_set(key, result)
     return result
