@@ -100,8 +100,6 @@ class SettingsPatch(BaseModel):
     target_lang: str | None = None
     default_provider: str | None = None
     vision_provider: str | None = None
-    usage_budget_5h: int | None = None
-    usage_budget_7d: int | None = None
     providers: dict[str, ProviderPatch] | None = None
 
 
@@ -124,10 +122,6 @@ async def put_settings(patch: SettingsPatch):
         s["default_provider"] = patch.default_provider
     if patch.vision_provider is not None:
         s["vision_provider"] = patch.vision_provider if patch.vision_provider in PROVIDERS else ""
-    for k in ("usage_budget_5h", "usage_budget_7d"):
-        v = getattr(patch, k)
-        if v is not None:
-            s[k] = max(0, int(v))
     for name, p in (patch.providers or {}).items():
         if name not in PROVIDERS:
             continue

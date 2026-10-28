@@ -632,7 +632,7 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
             <option key={m} value={m}>{m}</option>
           ))}
         </select>
-        <UsagePanel usage={usage} settings={settings} onSettingsChanged={onSettingsChanged} onRefresh={refreshUsage} />
+        <UsagePanel usage={usage} onRefresh={refreshUsage} />
         <button className="btn ghost" onClick={onOpenSettings} title="설정"><SettingsIcon size={18} /></button>
         <button className="btn ghost" onClick={() => setPanelOpen((v) => !v)} title="패널 접기/펴기">
           {panelOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}

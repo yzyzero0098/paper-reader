@@ -86,8 +86,6 @@ def _defaults() -> dict:
         "target_lang": "ko",
         "default_provider": "anthropic",
         "vision_provider": "",          # "" = same as default (or first vision-capable)
-        "usage_budget_5h": 0,           # optional personal token budgets for the usage panel (0 = none)
-        "usage_budget_7d": 0,
         "providers": {
             name: {"api_key": "", "model": p["model"], "base_url": p["base_url"]}
             for name, p in PROVIDERS.items()
@@ -103,7 +101,7 @@ def load_settings() -> dict:
                 saved = json.loads(SETTINGS_FILE.read_text("utf-8"))
             except Exception:
                 saved = {}
-            for k in ("target_lang", "default_provider", "vision_provider", "usage_budget_5h", "usage_budget_7d"):
+            for k in ("target_lang", "default_provider", "vision_provider"):
                 if k in saved:
                     s[k] = saved[k]
             for name, cfg in (saved.get("providers") or {}).items():
@@ -134,8 +132,6 @@ def public_settings() -> dict:
         "target_lang": s["target_lang"],
         "default_provider": s["default_provider"],
         "vision_provider": s["vision_provider"],
-        "usage_budget_5h": int(s.get("usage_budget_5h") or 0),
-        "usage_budget_7d": int(s.get("usage_budget_7d") or 0),
         "languages": LANG_NAMES,
         "providers": {},
     }

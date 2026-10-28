@@ -19,7 +19,7 @@ A **local web reader for research papers**. Open a PDF and get translation, figu
 | Topic folders | Create folders in the library sidebar and move papers by **dragging** them or with the folder picker on each card. Uploading while a folder is open puts the paper in it, and deleting a folder keeps its papers as `Unfiled`. Title search is included. |
 | Reading calendar | Logs which paper you read on which day and for how long, shown as a monthly calendar (folder-colored dots, papers and time per day, click a day for the list). Time only accumulates while the window is visible and focused, and reopening a paper resumes at the page you left. |
 | Notes and library | Translucent highlights with notes, PDF upload and delete. Translations and summaries are cached for instant reuse. |
-| Usage panel | The button at the top right shows this app's token usage for the last 5 hours and 7 days as bars, as a percentage of an optional personal budget, plus today / this paper / per-task details, the share used through the ChatGPT account, and when the plan limit was last hit. Plan-wide ChatGPT usage (5-hour and weekly %) is not exposed to third-party apps by OpenAI, so the panel links to the official usage page instead. |
+| Usage panel | The button at the top right shows this app's token usage (last 5 hours, 7 days, today, this paper, per task) and when the plan limit was last hit. OpenAI does not expose the ChatGPT plan's 5-hour and weekly limits (%) to third-party apps, so the panel links to the [usage page](https://chatgpt.com/settings/usage) for those. |
 
 ## Quick start
 

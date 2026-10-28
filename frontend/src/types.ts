@@ -167,8 +167,6 @@ export interface Settings {
   target_lang: string;
   default_provider: string;
   vision_provider: string;
-  usage_budget_5h: number;
-  usage_budget_7d: number;
   languages: Record<string, string>;
   providers: Record<string, ProviderInfo>;
 }
