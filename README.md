@@ -1,8 +1,10 @@
+[English](README.en.md) | **한국어**
+
 # Paper Reader
 
 논문 PDF를 열면 바로 AI 기능을 쓸 수 있는 **로컬 웹 리더**입니다. 번역, 그림 설명, 스마트 인용, 요약, 토론을 한 화면에서 하고, 모든 데이터는 내 컴퓨터에만 저장됩니다.
 
-*A local web reader for research papers: layout-aware translation, figure explanation, smart citations, summaries and Q&A on top of your own AI account or API key. Everything is stored on your machine. MIT licensed.*
+*A local web reader for research papers. English documentation: [README.en.md](README.en.md).*
 
 ## 기능
 
