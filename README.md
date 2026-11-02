@@ -38,7 +38,7 @@ pip install -r backend/requirements.txt
 | Windows | `start.bat` |
 | macOS / Linux | `bash start.sh` |
 
-처음 실행하면 프론트엔드를 자동으로 빌드하고 http://localhost:8000 이 열립니다. 이후 오른쪽 위 ⚙ 설정에서 AI를 연결하세요.
+처음 실행하면 프론트엔드를 자동으로 빌드하고, 서버가 준비되면 http://127.0.0.1:8000 이 열립니다. 브라우저가 안 열리면 이 주소를 직접 여세요. 이후 오른쪽 위 ⚙ 설정에서 AI를 연결하세요.
 
 개발 모드(핫리로드): `dev.bat` (백엔드 8000 + Vite 5173).
 

@@ -448,8 +448,9 @@ async def delete_highlight(pid: str, hid: int):
 
 
 # ---------------------------------------------------------------- frontend
-if FRONTEND_DIST.exists():
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+if (FRONTEND_DIST / "index.html").is_file():
+    if (FRONTEND_DIST / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
     @app.get("/{path:path}")
     async def spa(path: str):
@@ -457,3 +458,23 @@ if FRONTEND_DIST.exists():
         if path and target.is_file():
             return FileResponse(target)
         return FileResponse(FRONTEND_DIST / "index.html")
+else:
+    # No frontend build: explain how to make one instead of returning a bare 404.
+    from fastapi.responses import HTMLResponse
+
+    _NO_BUILD = """<!doctype html><meta charset="utf-8"><title>Paper Reader</title>
+<body style="font-family:system-ui;max-width:640px;margin:60px auto;line-height:1.6">
+<h2>Paper Reader 서버는 실행 중입니다</h2>
+<p>프론트엔드 빌드(<code>frontend/dist</code>)가 없어 화면을 띄울 수 없습니다.
+Node.js 18+를 설치한 뒤 프로젝트 폴더에서 아래를 실행하고 서버를 다시 시작하세요.</p>
+<pre style="background:#f3f3f3;padding:12px">cd frontend
+npm install
+npm run build</pre>
+<p>또는 <code>bash start.sh</code>로 실행하면 자동으로 빌드합니다.</p>
+<hr><p lang="en">The server is running, but the frontend build is missing.
+Run <code>npm install &amp;&amp; npm run build</code> in <code>frontend/</code>, then restart.</p>
+</body>"""
+
+    @app.get("/{path:path}", response_class=HTMLResponse)
+    async def no_build(path: str):
+        return HTMLResponse(_NO_BUILD)

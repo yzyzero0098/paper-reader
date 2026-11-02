@@ -36,7 +36,7 @@ pip install -r backend/requirements.txt
 | Windows | `start.bat` |
 | macOS / Linux | `bash start.sh` |
 
-On first run the frontend is built automatically and http://localhost:8000 opens. Then connect an AI in the settings (⚙, top right).
+On first run the frontend is built automatically, and http://127.0.0.1:8000 opens once the server is ready. If no browser opens, open that address yourself. Then connect an AI in the settings (⚙, top right).
 
 Development mode with hot reload: `dev.bat` (backend on 8000, Vite on 5173).
 
