@@ -12,6 +12,7 @@ import type {
 import PageView, { type SelectionInfo, type ViewMode } from "../components/PageView";
 import SidePanel, { RefMeta, type AiPrefs, type ExplainState, type Tab } from "../components/SidePanel";
 import UsagePanel from "../components/UsagePanel";
+import ThemeToggle from "../components/ThemeToggle";
 
 interface CitePopup {
   cite: Citation;
@@ -633,6 +634,7 @@ export default function Reader({ settings, onOpenSettings, onSettingsChanged }: 
           ))}
         </select>
         <UsagePanel usage={usage} onRefresh={refreshUsage} />
+        <ThemeToggle pdfOption />
         <button className="btn ghost" onClick={onOpenSettings} title="설정"><SettingsIcon size={18} /></button>
         <button className="btn ghost" onClick={() => setPanelOpen((v) => !v)} title="패널 접기/펴기">
           {panelOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}

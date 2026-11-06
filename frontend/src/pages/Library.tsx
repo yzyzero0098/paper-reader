@@ -7,6 +7,7 @@ import {
 import { api } from "../api";
 import type { Folder, Paper, Settings } from "../types";
 import ReadingCalendar from "../components/ReadingCalendar";
+import ThemeToggle from "../components/ThemeToggle";
 
 type Filter = "all" | "unfiled" | number;
 
@@ -153,9 +154,12 @@ export default function Library({ settings, onOpenSettings }: { settings: Settin
             <CalendarDays size={14} style={{ verticalAlign: "-2px" }} /> 읽기 캘린더
           </button>
         </div>
-        <button className="btn ghost" onClick={onOpenSettings} title="설정">
-          <SettingsIcon size={18} /> 설정
-        </button>
+        <div style={{ display: "flex", gap: 4 }}>
+          <ThemeToggle />
+          <button className="btn ghost" onClick={onOpenSettings} title="설정">
+            <SettingsIcon size={18} /> 설정
+          </button>
+        </div>
       </header>
 
       {noKey && (

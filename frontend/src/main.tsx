@@ -6,6 +6,9 @@ import "react-pdf/dist/Page/TextLayer.css";
 import "katex/dist/katex.min.css";
 import App from "./App";
 import "./styles.css";
+import { applyTheme } from "./theme";
+
+applyTheme();
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
